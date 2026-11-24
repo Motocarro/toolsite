@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import ToolInfo from '../../components/ToolInfo.astro';
 ---
 <Layout
   title="Compress Image to Exact Size (KB) - No Upload"
@@ -17,6 +18,22 @@ import Layout from '../../layouts/Layout.astro';
 
   <p id="status"></p>
   <a id="download" style="display:none">Download</a>
+    <ToolInfo
+    steps={[
+      "Choose an image from your device.",
+      "Set the maximum file size in KB.",
+      "Click Compress and download the result."
+    ]}
+    faqs={[
+      { q: "Is my image uploaded anywhere?", a: "No. Compression runs entirely in your browser, so the file never leaves your device." },
+      { q: "Why is the output always a JPG?", a: "JPG compresses photos well and lets us hit an exact size. Transparent areas become white." },
+      { q: "What if the target size is too small?", a: "The tool shrinks the image's dimensions automatically until it fits, if quality reduction alone isn't enough." }
+    ]}
+    related={[
+      { href: "/en/remove-exif", label: "Remove EXIF metadata" },
+      { href: "/en/heic-to-jpg", label: "HEIC to JPG" }
+    ]}
+  />
 </Layout>
 
 <script>

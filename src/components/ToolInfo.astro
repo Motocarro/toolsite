@@ -1,0 +1,27 @@
+---
+interface Props {
+  steps: string[];
+  faqs: { q: string; a: string }[];
+  related: { href: string; label: string }[];
+}
+const { steps, faqs, related } = Astro.props;
+---
+<section>
+  <h2>How it works</h2>
+  <ol>
+    {steps.map((s) => <li>{s}</li>)}
+  </ol>
+
+  <h2>FAQ</h2>
+  {faqs.map((f) => (
+    <details>
+      <summary>{f.q}</summary>
+      <p>{f.a}</p>
+    </details>
+  ))}
+
+  <h2>Related tools</h2>
+  <ul>
+    {related.map((r) => <li><a href={r.href}>{r.label}</a></li>)}
+  </ul>
+</section>
