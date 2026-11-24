@@ -1,0 +1,73 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+<Layout
+  title="Compress Image to Exact Size (KB) - No Upload"
+  description="Compress a JPG or PNG to a target size like 100KB, directly in your browser. Your image is never uploaded."
+>
+  <h1>Compress Image to a Target Size</h1>
+  <p>Pick an image and a maximum size. Everything happens in your browser.</p>
+
+  <input type="file" id="file" accept="image/*" />
+  <label>
+    Max size (KB):
+    <input type="number" id="target" value="100" min="5" />
+  </label>
+  <button id="go">Compress</button>
+
+  <p id="status"></p>
+  <a id="download" style="display:none">Download</a>
+</Layout>
+
+<script>
+  const fileInput = document.getElementById('file') as HTMLInputElement;
+  const targetInput = document.getElementById('target') as HTMLInputElement;
+  const goBtn = document.getElementById('go') as HTMLButtonElement;
+  const status = document.getElementById('status') as HTMLElement;
+  const download = document.getElementById('download') as HTMLAnchorElement;
+
+  function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  }
+
+  goBtn.addEventListener('click', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) { status.textContent = 'Choose an image first.'; return; }
+
+    const targetBytes = Number(targetInput.value) * 1024;
+    status.textContent = 'Compressing...';
+
+    const bitmap = await createImageBitmap(file);
+    let scale = 1;
+    let best: Blob | null = null;
+
+    // Try to hit the target by lowering quality; if impossible, shrink the image and retry.
+    for (let attempt = 0; attempt < 8 && !best; attempt++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#fff'; // JPEG has no transparency
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+      // Binary search on quality
+      let lo = 0.2, hi = 0.95;
+      for (let i = 0; i < 7; i++) {
+        const mid = (lo + hi) / 2;
+        const blob = await toBlob(canvas, mid);
+        if (blob && blob.size <= targetBytes) { best = blob; lo = mid; }
+        else { hi = mid; }
+      }
+      if (!best) scale *= 0.8;
+    }
+
+    if (!best) { status.textContent = 'Could not reach that size.'; return; }
+
+    download.href = URL.createObjectURL(best);
+    download.download = file.name.replace(/\.[^.]+$/, '') + '-compressed.jpg';
+    download.style.display = 'inline';
+    download.textContent = `Download (${(best.size / 1024).toFixed(1)} KB)`;
+    status.textContent = `Done: ${(file.size / 1024).toFixed(1)} KB → ${(best.size / 1024).toFixed(1)} KB`;
+  });
+</script>
