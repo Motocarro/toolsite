@@ -1,0 +1,119 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ToolInfo from '../../components/ToolInfo.astro';
+---
+<Layout
+  title="Remove EXIF Metadata from Photos - No Upload"
+  description="See what hidden data your photo contains (GPS location, camera, date) and remove it, directly in your browser. Nothing is uploaded."
+>
+  <h1>Remove EXIF Metadata from Photos</h1>
+  <p>Photos often hide your GPS location, camera model and timestamp. Pick an image to see what it reveals, then download a clean copy. Everything happens in your browser.</p>
+
+  <input type="file" id="file" accept="image/jpeg,image/png,image/webp" />
+
+  <h2 id="found-title" style="display:none">Metadata found</h2>
+  <ul id="found"></ul>
+
+  <button id="clean" style="display:none">Remove metadata</button>
+  <p id="status"></p>
+  <a id="download" style="display:none">Download</a>
+
+  <ToolInfo
+    steps={[
+      "Choose a JPG, PNG or WebP image.",
+      "Review the metadata found in the file, such as location and camera.",
+      "Click Remove metadata and download the clean copy."
+    ]}
+    faqs={[
+      { q: "What is EXIF data?", a: "A block of hidden information that cameras and phones embed in photos: when and where they were taken, the device model, sometimes even the software used to edit them." },
+      { q: "Is my photo uploaded?", a: "No. The file is read and re-encoded by your browser, and it never leaves your device." },
+      { q: "Does cleaning reduce image quality?", a: "JPGs are re-saved at high quality, so the difference is very hard to see, but it is not byte-for-byte lossless. PNGs stay lossless." },
+      { q: "Why does the photo show no metadata?", a: "Many apps and messaging services already strip it. If nothing is found, the image is already clean." }
+    ]}
+    related={[
+      { href: "/en/compress-image", label: "Compress image to a target size" },
+      { href: "/en/heic-to-jpg", label: "HEIC to JPG" }
+    ]}
+  />
+</Layout>
+<script>
+  import exifr from 'exifr';
+
+  const fileInput = document.getElementById('file') as HTMLInputElement;
+  const found = document.getElementById('found') as HTMLUListElement;
+  const foundTitle = document.getElementById('found-title') as HTMLElement;
+  const cleanBtn = document.getElementById('clean') as HTMLButtonElement;
+  const status = document.getElementById('status') as HTMLElement;
+  const download = document.getElementById('download') as HTMLAnchorElement;
+
+  const labels: Record<string, string> = {
+    Make: 'Camera maker',
+    Model: 'Camera model',
+    Software: 'Software',
+    DateTimeOriginal: 'Date taken',
+    latitude: 'GPS latitude',
+    longitude: 'GPS longitude',
+  };
+
+  fileInput.addEventListener('change', async () => {
+    found.replaceChildren();
+    download.style.display = 'none';
+    status.textContent = '';
+
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    let data: Record<string, unknown> | undefined;
+    try {
+      data = await exifr.parse(file);
+    } catch {
+      data = undefined;
+    }
+
+    let count = 0;
+    for (const [key, label] of Object.entries(labels)) {
+      const value = data?.[key];
+      if (value === undefined || value === null) continue;
+      const li = document.createElement('li');
+      li.textContent = `${label}: ${value instanceof Date ? value.toLocaleString() : String(value)}`;
+      found.appendChild(li);
+      count++;
+    }
+    if (count === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'No common metadata found. The image may already be clean.';
+      found.appendChild(li);
+    }
+
+    foundTitle.style.display = 'block';
+    cleanBtn.style.display = 'inline';
+  });
+
+  cleanBtn.addEventListener('click', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    status.textContent = 'Cleaning...';
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+
+      const outType = file.type === 'image/png' ? 'image/png'
+        : file.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+      const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, outType, 0.95));
+      if (!blob) throw new Error('encode failed');
+
+      const ext = outType.split('/')[1].replace('jpeg', 'jpg');
+      download.href = URL.createObjectURL(blob);
+      download.download = file.name.replace(/\.[^.]+$/, '') + '-clean.' + ext;
+      download.textContent = `Download clean copy (${(blob.size / 1024).toFixed(1)} KB)`;
+      download.style.display = 'inline';
+      status.textContent = 'Done. All metadata removed.';
+    } catch {
+      status.innerHTML = 'Your browser could not open this file. If it is a HEIC photo, convert it first with the <a href="/en/heic-to-jpg">HEIC to JPG tool</a>.';
+    }
+  });
+</script>

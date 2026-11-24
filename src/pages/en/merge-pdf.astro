@@ -1,0 +1,113 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ToolInfo from '../../components/ToolInfo.astro';
+---
+<Layout
+  title="Merge PDF Files - Free, No Upload"
+  description="Combine multiple PDF files into one, directly in your browser. Reorder files before merging. Nothing is uploaded."
+>
+  <h1>Merge PDF Files</h1>
+  <p>Add two or more PDFs, put them in the order you want, and download a single file. Everything happens in your browser.</p>
+
+  <input type="file" id="files" accept="application/pdf,.pdf" multiple />
+
+  <ol id="list"></ol>
+
+  <button id="go" disabled>Merge PDFs</button>
+  <p id="status"></p>
+  <a id="download" style="display:none">Download</a>
+
+  <ToolInfo
+    steps={[
+      "Add the PDF files you want to combine. You can add more in several rounds.",
+      "Use the arrows to put them in the right order, or remove any you don't need.",
+      "Click Merge PDFs and download the combined file."
+    ]}
+    faqs={[
+      { q: "Are my PDFs uploaded?", a: "No. The files are read and combined by your browser, so they never leave your device. This matters for contracts, IDs and other private documents." },
+      { q: "Is there a file size or page limit?", a: "There is no limit set by this site, but very large files are limited by your device's memory. If a merge fails, try fewer or smaller files." },
+      { q: "Why can't it open my PDF?", a: "Password-protected or encrypted PDFs cannot be merged. Remove the password first, then try again." },
+      { q: "Will the merged PDF keep its quality?", a: "Yes. Pages are copied as they are, without re-compressing images or text." }
+    ]}
+    related={[
+      { href: "/en/compress-image", label: "Compress image to a target size" },
+      { href: "/en/remove-exif", label: "Remove EXIF metadata" },
+      { href: "/en/heic-to-jpg", label: "HEIC to JPG" }
+    ]}
+  />
+</Layout>
+
+<script>
+  import { PDFDocument } from 'pdf-lib';
+
+  const input = document.getElementById('files') as HTMLInputElement;
+  const list = document.getElementById('list') as HTMLOListElement;
+  const goBtn = document.getElementById('go') as HTMLButtonElement;
+  const status = document.getElementById('status') as HTMLElement;
+  const download = document.getElementById('download') as HTMLAnchorElement;
+
+  let files: File[] = [];
+
+  function render() {
+    list.replaceChildren();
+    files.forEach((file, i) => {
+      const li = document.createElement('li');
+      li.append(`${file.name} (${(file.size / 1024).toFixed(0)} KB) `);
+
+      const mkBtn = (label: string, disabled: boolean, onClick: () => void) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.disabled = disabled;
+        b.addEventListener('click', onClick);
+        return b;
+      };
+
+      li.append(
+        mkBtn('↑', i === 0, () => { [files[i - 1], files[i]] = [files[i], files[i - 1]]; render(); }),
+        mkBtn('↓', i === files.length - 1, () => { [files[i + 1], files[i]] = [files[i], files[i + 1]]; render(); }),
+        mkBtn('Remove', false, () => { files.splice(i, 1); render(); }),
+      );
+      list.appendChild(li);
+    });
+    goBtn.disabled = files.length < 2;
+    download.style.display = 'none';
+    status.textContent = files.length === 1 ? 'Add at least one more PDF.' : '';
+  }
+
+  input.addEventListener('change', () => {
+    files.push(...Array.from(input.files ?? []));
+    input.value = ''; // allows picking the same file again
+    render();
+  });
+
+  goBtn.addEventListener('click', async () => {
+    goBtn.disabled = true;
+    status.textContent = 'Merging...';
+    try {
+      const merged = await PDFDocument.create();
+      for (const file of files) {
+        let src;
+        try {
+          src = await PDFDocument.load(await file.arrayBuffer());
+        } catch {
+          throw new Error(`Could not read "${file.name}". It may be encrypted or damaged.`);
+        }
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
+      }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+
+      download.href = URL.createObjectURL(blob);
+      download.download = 'merged.pdf';
+      download.textContent = `Download merged.pdf (${(blob.size / 1024).toFixed(0)} KB)`;
+      download.style.display = 'inline';
+      status.textContent = `Done: ${files.length} files merged.`;
+    } catch (e) {
+      status.textContent = e instanceof Error ? e.message : 'Something went wrong.';
+    } finally {
+      goBtn.disabled = files.length < 2;
+    }
+  });
+</script>

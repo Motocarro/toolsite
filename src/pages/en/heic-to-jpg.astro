@@ -1,0 +1,89 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ToolInfo from '../../components/ToolInfo.astro';
+---
+<Layout
+  title="HEIC to JPG Converter - No Upload, Free"
+  description="Convert iPhone HEIC photos to JPG directly in your browser. Multiple files at once, nothing is uploaded."
+>
+  <h1>HEIC to JPG Converter</h1>
+  <p>Convert iPhone photos to JPG without uploading them anywhere. The conversion runs in your browser.</p>
+
+  <input type="file" id="files" accept=".heic,.heif,image/heic,image/heif" multiple />
+  <label>
+    Quality: <span id="qval">90</span>%
+    <input type="range" id="quality" min="50" max="100" value="90" />
+  </label>
+  <button id="go">Convert</button>
+
+  <p id="status"></p>
+  <ul id="results"></ul>
+
+  <ToolInfo
+    steps={[
+      "Choose one or more HEIC photos.",
+      "Pick the JPG quality (90% is a good default).",
+      "Click Convert and download each JPG."
+    ]}
+    faqs={[
+      { q: "What is a HEIC file?", a: "The default photo format on iPhones. It is smaller than JPG at similar quality, but many websites, apps and Windows programs cannot open it." },
+      { q: "Are my photos uploaded?", a: "No. The conversion runs in your browser using WebAssembly, so your photos never leave your device." },
+      { q: "Is any metadata kept?", a: "The converted JPG does not carry over the original's metadata, including GPS location, so you also get a more private copy." },
+      { q: "Why does the first conversion take a moment?", a: "The converter is downloaded the first time you use it, then runs locally." }
+    ]}
+    related={[
+      { href: "/en/remove-exif", label: "Remove EXIF metadata" },
+      { href: "/en/compress-image", label: "Compress image to a target size" }
+    ]}
+  />
+</Layout>
+
+<script>
+  const input = document.getElementById('files') as HTMLInputElement;
+  const quality = document.getElementById('quality') as HTMLInputElement;
+  const qval = document.getElementById('qval') as HTMLElement;
+  const goBtn = document.getElementById('go') as HTMLButtonElement;
+  const status = document.getElementById('status') as HTMLElement;
+  const results = document.getElementById('results') as HTMLUListElement;
+
+  quality.addEventListener('input', () => { qval.textContent = quality.value; });
+
+  goBtn.addEventListener('click', async () => {
+    const files = Array.from(input.files ?? []);
+    if (files.length === 0) { status.textContent = 'Choose at least one HEIC file.'; return; }
+
+    results.replaceChildren();
+    goBtn.disabled = true;
+    status.textContent = 'Loading converter...';
+
+    try {
+      const { heicTo } = await import('heic-to');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        status.textContent = `Converting ${i + 1} of ${files.length}...`;
+        const li = document.createElement('li');
+        try {
+          const blob = await heicTo({
+            blob: file,
+            type: 'image/jpeg',
+            quality: Number(quality.value) / 100,
+          });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+          a.textContent = `${a.download} (${(blob.size / 1024).toFixed(0)} KB)`;
+          li.appendChild(a);
+        } catch {
+          li.textContent = `${file.name}: could not be converted (is it really a HEIC file?)`;
+        }
+        results.appendChild(li);
+      }
+      status.textContent = 'Done.';
+    } catch {
+      status.textContent = 'Could not load the converter. Please reload the page and try again.';
+    } finally {
+      goBtn.disabled = false;
+    }
+  });
+</script>
